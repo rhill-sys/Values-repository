@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Values in Action — KIPP Recognition Platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, button, input, select, textarea { font-family: 'DM Sans', sans-serif; }
+    body { background: #f7f4ef; }
+    ::placeholder { color: #c0b09a; }
+    textarea { resize: vertical; }
+    select option { background: #fff; }
+    @media (max-width: 700px) {
+      .value-grid-5 { grid-template-columns: repeat(3, 1fr) !important; }
+      .value-grid-3 { grid-template-columns: 1fr !important; }
+      .form-grid-2 { grid-template-columns: 1fr !important; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      .filter-bar { flex-direction: column; }
+      .filter-bar input, .filter-bar select { width: 100% !important; }
+      .nav-inner { gap: 4px !important; }
+      .nav-inner > div:first-child { margin-right: 8px !important; }
+      .hero-title { font-size: 28px !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    // =========================================================
+    // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+    // =========================================================
+    const SCRIPT_URL = "";
+    // =========================================================
+
+    const VALUES = [
+      { id: "kid_focus", label: "Kid Focus", emoji: "⭐", color: "#E8734A", desc: "Promises to Kids are Sacred. We lead with our students at the center—always." },
+      { id: "radical_love", label: "Radical Love", emoji: "❤️", color: "#C25E8A", desc: "Fierce care, bold belief, and high expectations that nurture our communities’ full humanity." },
+      { id: "excellence", label: "Excellence", emoji: "🏆", color: "#5C8FA8", desc: "Continuous improvement in pursuit of the highest standards, with unwavering integrity." },
+      { id: "team", label: "TEAM", emoji: "🤝", color: "#4FAD82", desc: "Together Everyone Achieves More. Trusting relationships and collaboration get results for kids." },
+      { id: "fun", label: "Fun", emoji: "🎉", color: "#7C6EB5", desc: "Joyful culture, serious mission." },
+    ];
+
+    const DEPARTMENTS = [
+      "Teaching & Learning", "School Leadership", "Student Support", "Operations",
+      "Data & Accountability", "Family & Community Engagement", "Finance",
+      "People & Culture", "Technology", "Central Office",
+    ];
+
+    const fmt = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const getVal = (id) => VALUES.find((v) => v.id === id);
+
+    // ----- Components -----
+
+    const Pill = ({ id }) => {
+      const v = getVal(id);
+      if (!v) return null;
+      return (
+        <span style={{ background: v.color + "18", color: v.color, border: "1.5px solid " + v.color + "40", borderRadius: 99, padding: "3px 12px", fontSize: 11, fontWeight: 700, letterSpacing: 0.4, display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {v.emoji} {v.label}
+        </span>
+      );
+    };
+
+    const Avatar = ({ name, size = 44, color }) => {
+      const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+      return (
+        <div style={{ width: size, height: size, borderRadius: "50%", background: color ? color + "28" : "#f0ede8", color: color || "#888", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: size * 0.36, flexShrink: 0, border: "2px solid " + (color ? color + "38" : "#e8e3dc") }}>
+          {initials}
+        </div>
+      );
+    };
+
+    const Card = ({ s, onReact, onHighlight, onApprove, onReject, isAdmin }) => {
+      const v = getVal(s.value);
+      const isPending = s.status === "pending";
+      return (
+        <div style={{ background: s.highlighted ? "linear-gradient(135deg,#fffcf5,#fff8ec)" : "#fff", border: s.highlighted ? "2px solid #E0C97A" : isPending ? "2px dashed #e0d5c8" : "1.5px solid #ede9e2", borderRadius: 20, padding: "26px 28px", position: "relative", boxShadow: s.highlighted ? "0 6px 28px rgba(224,180,80,.12)" : "0 2px 10px rgba(80,60,30,.04)", opacity: isPending ? 0.9 : 1 }}>
+          {s.highlighted && (
+            <div style={{ position: "absolute", top: -1, right: 22, background: "linear-gradient(135deg,#E0C97A,#D4704A)", color: "#fff", fontSize: 10, fontWeight: 800, letterSpacing: 1.6, padding: "3px 14px", borderRadius: "0 0 10px 10px", textTransform: "uppercase" }}>{"✦"} Featured</div>
+          )}
+          {isPending && (
+            <div style={{ position: "absolute", top: 16, right: 20, background: "#FFF8E6", color: "#C08010", border: "1.5px solid #F0D080", borderRadius: 99, fontSize: 11, fontWeight: 700, padding: "3px 12px" }}>{"⏳"} Awaiting Review</div>
+          )}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 16 }}>
+            <Avatar name={s.nominee} size={46} color={v?.color} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 16.5, color: "#2c2418", lineHeight: 1.2 }}>{s.nominee}</div>
+              <div style={{ fontSize: 12, color: "#a0907a", marginTop: 3, fontWeight: 500 }}>
+                {s.department} · Recognized by <span style={{ color: "#7a6a5a", fontWeight: 700 }}>{s.nominator}</span>
+              </div>
+              <div style={{ marginTop: 7, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <Pill id={s.value} />
+                <span style={{ fontSize: 11, color: "#c0b09a" }}>{fmt(s.date)}</span>
+              </div>
+            </div>
+          </div>
+          <p style={{ fontSize: 14.5, lineHeight: 1.8, color: "#5a4a3a", margin: "0 0 18px 0", borderLeft: "3px solid " + (v?.color || "#ddd"), paddingLeft: 16, fontStyle: "italic" }}>
+            "{s.story}"
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {!isPending && Object.entries(s.reactions).map(([emoji, count]) => (
+              <button key={emoji} onClick={() => onReact(s.id, emoji)} style={{ background: "#faf7f2", border: "1.5px solid #ede8e0", borderRadius: 99, padding: "4px 13px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#6a5a4a", display: "flex", alignItems: "center", gap: 4 }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f0ebe0")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#faf7f2")}>
+                {emoji} {count}
+              </button>
+            ))}
+            {isAdmin && !isPending && (
+              <button onClick={() => onHighlight(s.id)} style={{ marginLeft: "auto", background: s.highlighted ? "#FFF3CD" : "transparent", border: "1.5px solid " + (s.highlighted ? "#E0C97A" : "#ddd"), borderRadius: 99, padding: "4px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: s.highlighted ? "#a07010" : "#aaa" }}>
+                {s.highlighted ? "★ Unfeature" : "★ Feature"}
+              </button>
+            )}
+            {isAdmin && isPending && (
+              <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                <button onClick={() => onReject(s.id)} style={{ background: "#fff0ee", border: "1.5px solid #F0A090", borderRadius: 99, padding: "5px 16px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#C05040" }}>{"✕"} Decline</button>
+                <button onClick={() => onApprove(s.id)} style={{ background: "linear-gradient(135deg,#4FAD82,#3d9a6f)", border: "none", borderRadius: 99, padding: "5px 18px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#fff" }}>{"✓"} Approve & Publish</button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // ----- Main App -----
+
+    function App() {
+      const [stories, setStories] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [submitting, setSubmitting] = useState(false);
+      const [tab, setTab] = useState("feed");
+      const [isAdmin, setIsAdmin] = useState(false);
+      const [filterVal, setFilterVal] = useState("all");
+      const [filterDept, setFilterDept] = useState("all");
+      const [search, setSearch] = useState("");
+      const [featured, setFeatured] = useState(false);
+      const [done, setDone] = useState(false);
+      const [form, setForm] = useState({ nominee: "", nominator: "", department: "", value: "", story: "" });
+      const [errs, setErrs] = useState({});
+
+      // ----- Load stories from Google Sheet -----
+      const fetchStories = useCallback(() => {
+        if (!SCRIPT_URL) {
+          setLoading(false);
+          return;
+        }
+        fetch(SCRIPT_URL)
+          .then((r) => r.json())
+          .then((res) => {
+            if (res.success && res.data) {
+              const mapped = res.data.map((row, i) => {
+                let reactions = { "💛": 0, "👏": 0, "🌟": 0 };
+                try { if (row.Reactions) reactions = JSON.parse(row.Reactions); } catch (e) {}
+                return {
+                  id: i + 1,
+                  nominee: row.Nominee || "",
+                  nominator: row.Nominator || "",
+                  department: row.Department || "",
+                  value: row.Value || "",
+                  story: row.Story || "",
+                  status: (row.Status || "pending").toLowerCase().trim(),
+                  highlighted: (row.Highlighted || "").toString().toLowerCase() === "yes",
+                  date: row.Timestamp ? new Date(row.Timestamp).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+                  reactions: reactions,
+                };
+              });
+              setStories(mapped);
+            }
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
+      }, []);
+
+      useEffect(() => { fetchStories(); }, [fetchStories]);
+
+      // ----- Derived data -----
+      const published = stories.filter((s) => s.status === "published");
+      const pending = stories.filter((s) => s.status === "pending");
+
+      const feed = published
+        .filter((s) => {
+          if (filterVal !== "all" && s.value !== filterVal) return false;
+          if (filterDept !== "all" && s.department !== filterDept) return false;
+          if (featured && !s.highlighted) return false;
+          if (search && !(s.nominee + " " + s.nominator + " " + s.story).toLowerCase().includes(search.toLowerCase())) return false;
+          return true;
+        })
+        .sort((a, b) => b.highlighted - a.highlighted || new Date(b.date) - new Date(a.date));
+
+      const react = (id, e) => setStories((p) => p.map((s) => (s.id === id ? { ...s, reactions: { ...s.reactions, [e]: (s.reactions[e] || 0) + 1 } } : s)));
+      const highlight = (id) => setStories((p) => p.map((s) => (s.id === id ? { ...s, highlighted: !s.highlighted } : s)));
+      const approve = (id) => setStories((p) => p.map((s) => (s.id === id ? { ...s, status: "published" } : s)));
+      const reject = (id) => setStories((p) => p.filter((s) => s.id !== id));
+
+      // ----- Validation -----
+      const validate = () => {
+        const e = {};
+        if (!form.nominee.trim()) e.nominee = "Who are we celebrating?";
+        if (!form.nominator.trim()) e.nominator = "What's your name?";
+        if (!form.department) e.department = "Pick a department";
+        if (!form.value) e.value = "Choose a value";
+        if (form.story.trim().length < 60) e.story = "Tell us more — aim for a few real sentences!";
+        return e;
+      };
+
+      // ----- Submit to Google Sheet -----
+      const submit = () => {
+        const e = validate();
+        if (Object.keys(e).length) { setErrs(e); return; }
+        setSubmitting(true);
+
+        if (!SCRIPT_URL) {
+          // Fallback: local-only mode when no script URL configured
+          setStories((p) => [
+            { id: Date.now(), status: "pending", highlighted: false, ...form, date: new Date().toISOString().split("T")[0], reactions: { "💛": 0, "👏": 0, "🌟": 0 } },
+            ...p,
+          ]);
+          setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
+          setDone(true);
+          setSubmitting(false);
+          setTimeout(() => { setDone(false); setTab("feed"); }, 3000);
+          return;
+        }
+
+        fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            nominee: form.nominee.trim(),
+            nominator: form.nominator.trim(),
+            department: form.department,
+            value: form.value,
+            story: form.story.trim(),
+          }),
+        })
+          .then((r) => r.json())
+          .then((res) => {
+            if (res.success) {
+              setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
+              setDone(true);
+              setSubmitting(false);
+              setTimeout(() => { setDone(false); setTab("feed"); fetchStories(); }, 3000);
+            } else {
+              alert("Something went wrong. Please try again.");
+              setSubmitting(false);
+            }
+          })
+          .catch(() => {
+            alert("Could not reach the server. Please check your connection and try again.");
+            setSubmitting(false);
+          });
+      };
+
+      // ----- Styles -----
+      const inp = (err) => ({ width: "100%", padding: "11px 14px", border: "1.5px solid " + (err ? "#D4704A" : "#e0d8ce"), borderRadius: 10, fontSize: 14, color: "#3a2c1e", background: "#faf8f5", outline: "none", boxSizing: "border-box", transition: "border 0.2s" });
+      const lbl = { fontSize: 11.5, fontWeight: 700, color: "#8a7a68", letterSpacing: 0.9, textTransform: "uppercase", marginBottom: 6, display: "block" };
+      const navBtn = (active) => ({ background: active ? "#fff" : "transparent", border: active ? "1.5px solid #e0d8ce" : "1.5px solid transparent", borderRadius: 10, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, color: active ? "#3a2c1e" : "#a09080", transition: "all 0.15s", boxShadow: active ? "0 2px 8px rgba(80,50,20,.08)" : "none" });
+
+      const stats = VALUES.map((v) => ({ ...v, count: published.filter((s) => s.value === v.id).length }));
+      const totalReactions = published.reduce((a, s) => a + Object.values(s.reactions).reduce((x, y) => x + y, 0), 0);
+
+      // ----- No Script URL warning -----
+      const noUrl = !SCRIPT_URL;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#f7f4ef" }}>
+          {noUrl && (
+            <div style={{ background: "#FFF3CD", borderBottom: "2px solid #E0C97A", padding: "12px 24px", textAlign: "center", fontSize: 13, color: "#856404", fontWeight: 600 }}>
+              {"⚠️"} Google Sheet not connected yet. Open this file, find <code>SCRIPT_URL</code> near the top, and paste your Apps Script Web App URL. Submissions will work locally until then.
+            </div>
+          )}
+
+          {/* NAV */}
+          <nav style={{ background: "#fffdf9", borderBottom: "1.5px solid #ede8e0", padding: "0 28px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(80,50,20,.06)" }}>
+            <div className="nav-inner" style={{ maxWidth: 1080, margin: "0 auto", display: "flex", alignItems: "center", height: 66, gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 16 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#D4704A,#E0C97A)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#fff", fontWeight: 900 }}>{"✦"}</div>
+                <div>
+                  <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 17, color: "#2c1f0e", lineHeight: 1 }}>Values in Action</div>
+                  <div style={{ fontSize: 10, color: "#b0a090", letterSpacing: 0.5, marginTop: 1 }}>Recognition Platform</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 4, flex: 1 }}>
+                {[["feed", "💛 Stories"], ["submit", "✍️ Recognize Someone"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setTab(v)} style={navBtn(tab === v)}>{l}</button>
+                ))}
+              </div>
+              <button
+                onClick={() => { setIsAdmin((a) => !a); setTab("admin"); }}
+                style={{ ...navBtn(tab === "admin"), borderColor: isAdmin ? "#4FAD82" : undefined, color: isAdmin ? "#2e7d5a" : undefined, background: isAdmin ? "#f0faf5" : undefined }}>
+                {isAdmin ? "⚙️ Admin ✓" : "⚙️ Admin"}
+                {pending.length > 0 && isAdmin && <span style={{ marginLeft: 6, background: "#D4704A", color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pending.length}</span>}
+              </button>
+            </div>
+          </nav>
+
+          <div style={{ maxWidth: 1080, margin: "0 auto", padding: "32px 24px" }}>
+            {/* LOADING */}
+            {loading && (
+              <div style={{ textAlign: "center", padding: "80px 0", color: "#b0a090", fontSize: 16, fontWeight: 600 }}>
+                Loading stories...
+              </div>
+            )}
+
+            {/* FEED */}
+            {!loading && tab === "feed" && (
+              <div>
+                <div style={{ textAlign: "center", marginBottom: 36 }}>
+                  <div className="hero-title" style={{ fontFamily: "'DM Serif Display',serif", fontSize: 38, color: "#2c1f0e", lineHeight: 1.15, marginBottom: 10 }}>Our Team, Living Our Values</div>
+                  <p style={{ fontSize: 16, color: "#9a8a78", maxWidth: 520, margin: "0 auto", lineHeight: 1.7 }}>Every story here is real — a teammate who showed up for kids, for families, and for each other. This is what our values look like in action.</p>
+                </div>
+
+                {/* Value tiles */}
+                <div className="value-grid-5" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 28 }}>
+                  {stats.map((v) => (
+                    <div key={v.id} onClick={() => setFilterVal(filterVal === v.id ? "all" : v.id)} style={{ background: filterVal === v.id ? v.color + "20" : "#fff", border: "2px solid " + (filterVal === v.id ? v.color : "#ede8e0"), borderRadius: 14, padding: "14px 8px", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
+                      <div style={{ fontSize: 22 }}>{v.emoji}</div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: "#3a2c1e", marginTop: 4 }}>{v.label}</div>
+                      <div style={{ fontSize: 10, color: "#b0a090", marginTop: 2 }}>{v.count} stories</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="filter-bar" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
+                  <input placeholder="🔍  Search stories or people…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp(false), width: 260, background: "#fff" }} />
+                  <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} style={{ ...inp(false), width: 200, background: "#fff" }}>
+                    <option value="all">All Departments</option>
+                    {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <button onClick={() => setFeatured((f) => !f)} style={{ background: featured ? "#FFF8E6" : "#fff", border: "1.5px solid " + (featured ? "#E0C97A" : "#e0d8ce"), borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: featured ? "#a07010" : "#9a8a78" }}>
+                    {"★"} Featured Only
+                  </button>
+                  <span style={{ marginLeft: "auto", fontSize: 12, color: "#c0b09a" }}>{feed.length} {feed.length === 1 ? "story" : "stories"}</span>
+                </div>
+
+                {feed.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "60px 0", color: "#c0b09a", fontSize: 15 }}>No stories match — try adjusting the filters.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {feed.map((s) => <Card key={s.id} s={s} onReact={react} onHighlight={highlight} isAdmin={isAdmin} />)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SUBMIT */}
+            {!loading && tab === "submit" && (
+              <div style={{ maxWidth: 660, margin: "0 auto" }}>
+                {done ? (
+                  <div style={{ background: "#fff", borderRadius: 24, padding: "64px 40px", textAlign: "center", border: "2px solid #4FAD8240", boxShadow: "0 8px 32px rgba(79,173,130,.1)" }}>
+                    <div style={{ fontSize: 60, marginBottom: 16 }}>{"🌻"}</div>
+                    <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, color: "#2c1f0e", marginBottom: 10 }}>Thank you for sharing!</div>
+                    <p style={{ fontSize: 15, color: "#9a8a78", lineHeight: 1.7 }}>Your recognition has been submitted and will go live once our team reviews it. These stories matter.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 28 }}>
+                      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 32, color: "#2c1f0e", marginBottom: 10 }}>Recognize a Teammate</div>
+                      <p style={{ fontSize: 15, color: "#9a8a78", lineHeight: 1.7 }}>The best recognitions are specific — name what happened, what they chose to do, and why it mattered.</p>
+                    </div>
+
+                    <div style={{ marginBottom: 22 }}>
+                      <label style={lbl}>Which value did they demonstrate? *</label>
+                      <div className="value-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                        {VALUES.map((v) => (
+                          <div key={v.id} onClick={() => { setForm({ ...form, value: v.id }); setErrs({ ...errs, value: null }); }} style={{ background: form.value === v.id ? v.color + "18" : "#fff", border: "2px solid " + (form.value === v.id ? v.color : "#ede8e0"), borderRadius: 14, padding: "14px 12px", cursor: "pointer", transition: "all 0.15s" }}>
+                            <div style={{ fontSize: 22, marginBottom: 4 }}>{v.emoji}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#2c1f0e" }}>{v.label}</div>
+                            <div style={{ fontSize: 11, color: "#a09080", marginTop: 2, lineHeight: 1.4 }}>{v.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {errs.value && <div style={{ color: "#D4704A", fontSize: 12, marginTop: 6 }}>{errs.value}</div>}
+                    </div>
+
+                    <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                      <div>
+                        <label style={lbl}>Who are you recognizing? *</label>
+                        <input placeholder="Their full name" value={form.nominee} onChange={(e) => { setForm({ ...form, nominee: e.target.value }); setErrs({ ...errs, nominee: null }); }} style={inp(errs.nominee)} />
+                        {errs.nominee && <div style={{ color: "#D4704A", fontSize: 12, marginTop: 4 }}>{errs.nominee}</div>}
+                      </div>
+                      <div>
+                        <label style={lbl}>Your name *</label>
+                        <input placeholder="Your full name" value={form.nominator} onChange={(e) => { setForm({ ...form, nominator: e.target.value }); setErrs({ ...errs, nominator: null }); }} style={inp(errs.nominator)} />
+                        {errs.nominator && <div style={{ color: "#D4704A", fontSize: 12, marginTop: 4 }}>{errs.nominator}</div>}
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={lbl}>Their Department *</label>
+                      <select value={form.department} onChange={(e) => { setForm({ ...form, department: e.target.value }); setErrs({ ...errs, department: null }); }} style={inp(errs.department)}>
+                        <option value="">Select a department…</option>
+                        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      {errs.department && <div style={{ color: "#D4704A", fontSize: 12, marginTop: 4 }}>{errs.department}</div>}
+                    </div>
+
+                    <div style={{ marginBottom: 28 }}>
+                      <label style={lbl}>Tell their story *</label>
+                      <textarea rows={6} value={form.story} placeholder="What did they do? What was the situation, what choice did they make, and what difference did it make? The more real and specific, the more powerful it is." onChange={(e) => { setForm({ ...form, story: e.target.value }); setErrs({ ...errs, story: null }); }} style={{ ...inp(errs.story), lineHeight: 1.7 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+                        {errs.story ? <div style={{ color: "#D4704A", fontSize: 12 }}>{errs.story}</div> : <span style={{ fontSize: 11, color: "#c0b09a" }}>Your story will be reviewed before publishing</span>}
+                        <span style={{ fontSize: 11, color: "#c0b09a" }}>{form.story.length} chars</span>
+                      </div>
+                    </div>
+
+                    <button onClick={submit} disabled={submitting} style={{ background: submitting ? "#ccc" : "linear-gradient(135deg,#D4704A,#E0A830)", border: "none", borderRadius: 12, padding: "15px 32px", color: "#fff", fontWeight: 800, fontSize: 15, cursor: submitting ? "not-allowed" : "pointer", width: "100%", letterSpacing: 0.3, opacity: submitting ? 0.7 : 1 }}
+                      onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.opacity = "0.88"; }}
+                      onMouseLeave={(e) => { if (!submitting) e.currentTarget.style.opacity = "1"; }}>
+                      {submitting ? "Submitting..." : "Submit Recognition ✦"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ADMIN */}
+            {!loading && tab === "admin" && (
+              <div>
+                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 30, color: "#2c1f0e", marginBottom: 6 }}>Admin — Moderation & Highlights</div>
+                <p style={{ fontSize: 14, color: "#9a8a78", marginBottom: 28, lineHeight: 1.6 }}>Review pending submissions before they go live. Feature standout stories to surface them across the organization.</p>
+
+                <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 36 }}>
+                  {[
+                    { label: "Published Stories", val: published.length, emoji: "📖" },
+                    { label: "Pending Review", val: pending.length, emoji: "⏳", warn: pending.length > 0 },
+                    { label: "People Recognized", val: new Set(published.map((s) => s.nominee)).size, emoji: "👥" },
+                    { label: "Total Reactions", val: totalReactions, emoji: "💛" },
+                  ].map((stat) => (
+                    <div key={stat.label} style={{ background: "#fff", border: "1.5px solid " + (stat.warn ? "#E0C97A" : "#ede8e0"), borderRadius: 16, padding: "20px 22px", boxShadow: stat.warn ? "0 2px 12px rgba(224,180,80,.15)" : "none" }}>
+                      <div style={{ fontSize: 26, marginBottom: 8 }}>{stat.emoji}</div>
+                      <div style={{ fontSize: 30, fontWeight: 800, color: stat.warn ? "#a07010" : "#2c1f0e", lineHeight: 1 }}>{stat.val}</div>
+                      <div style={{ fontSize: 12, color: "#b0a090", marginTop: 5, fontWeight: 600 }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {pending.length > 0 && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingBottom: 10, borderBottom: "1.5px solid #ede8e0" }}>
+                      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: "#2c1f0e" }}>Pending Review</div>
+                      <span style={{ background: "#D4704A", color: "#fff", borderRadius: 99, fontSize: 11, fontWeight: 800, padding: "2px 10px" }}>{pending.length}</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {pending.map((s) => <Card key={s.id} s={s} onReact={react} onHighlight={highlight} onApprove={approve} onReject={reject} isAdmin={true} />)}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 20, color: "#2c1f0e", marginBottom: 14, paddingBottom: 10, borderBottom: "1.5px solid #ede8e0" }}>Published Stories</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {published.sort((a, b) => b.highlighted - a.highlighted || new Date(b.date) - new Date(a.date)).map((s) => (
+                      <Card key={s.id} s={s} onReact={react} onHighlight={highlight} isAdmin={true} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
