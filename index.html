@@ -36,7 +36,7 @@
     // =========================================================
     // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     // =========================================================
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx2gUMmO4JnDhsRhd7XHspqqGG2jed6T4ieBGwOnqYO0SQqSSoPoTqw5uW0_8YCgmtb/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwG1q1ZR5GR7AeeT2-kJoUf671H_ecZUUcOsA8B-Q6nvynxvW7lm0Enh8U0AfIbFSXU/exec";
     // =========================================================
 
     const VALUES = [
@@ -214,14 +214,13 @@
         return e;
       };
 
-      // ----- Submit to Google Sheet -----
+      // ----- Submit to Google Sheet via hidden form/iframe -----
       const submit = () => {
         const e = validate();
         if (Object.keys(e).length) { setErrs(e); return; }
         setSubmitting(true);
 
         if (!SCRIPT_URL) {
-          // Fallback: local-only mode when no script URL configured
           setStories((p) => [
             { id: Date.now(), status: "pending", highlighted: false, ...form, date: new Date().toISOString().split("T")[0], reactions: { "💛": 0, "👏": 0, "🌟": 0 } },
             ...p,
@@ -233,29 +232,47 @@
           return;
         }
 
-        // Use no-cors mode to avoid CORS issues with Google Apps Script redirects
-        // We can't read the response, but the data will arrive in the sheet
-        fetch(SCRIPT_URL, {
-          method: "POST",
-          mode: "no-cors",
-          body: JSON.stringify({
-            nominee: form.nominee.trim(),
-            nominator: form.nominator.trim(),
-            department: form.department,
-            value: form.value,
-            story: form.story.trim(),
-          }),
-        })
-          .then(() => {
-            setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
-            setDone(true);
-            setSubmitting(false);
-            setTimeout(() => { setDone(false); setTab("feed"); fetchStories(); }, 3000);
-          })
-          .catch(() => {
-            alert("Could not reach the server. Please check your connection and try again.");
-            setSubmitting(false);
-          });
+        // Use a hidden iframe + form to POST — this handles Google's redirects natively
+        const iframeName = "submit_iframe_" + Date.now();
+        const iframe = document.createElement("iframe");
+        iframe.name = iframeName;
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+
+        const hiddenForm = document.createElement("form");
+        hiddenForm.method = "POST";
+        hiddenForm.action = SCRIPT_URL;
+        hiddenForm.target = iframeName;
+
+        const fields = {
+          nominee: form.nominee.trim(),
+          nominator: form.nominator.trim(),
+          department: form.department,
+          value: form.value,
+          story: form.story.trim(),
+        };
+
+        Object.entries(fields).forEach(([key, val]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = val;
+          hiddenForm.appendChild(input);
+        });
+
+        document.body.appendChild(hiddenForm);
+        hiddenForm.submit();
+
+        // Clean up and show success after a short delay
+        setTimeout(() => {
+          document.body.removeChild(hiddenForm);
+          document.body.removeChild(iframe);
+        }, 5000);
+
+        setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
+        setDone(true);
+        setSubmitting(false);
+        setTimeout(() => { setDone(false); setTab("feed"); fetchStories(); }, 3000);
       };
 
       // ----- Styles -----
