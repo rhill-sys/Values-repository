@@ -36,7 +36,7 @@
     // =========================================================
     // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     // =========================================================
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwG1q1ZR5GR7AeeT2-kJoUf671H_ecZUUcOsA8B-Q6nvynxvW7lm0Enh8U0AfIbFSXU/exec";
+    const SCRIPT_URL = "";
     // =========================================================
 
     const VALUES = [
@@ -136,6 +136,21 @@
       const [submitting, setSubmitting] = useState(false);
       const [tab, setTab] = useState("feed");
       const [isAdmin, setIsAdmin] = useState(false);
+      const [adminPassword, setAdminPassword] = useState("");
+      const [adminUnlocked, setAdminUnlocked] = useState(false);
+
+      // ----- Admin password (change this to whatever you want) -----
+      const ADMIN_PASSWORD = "kippvalues2026";
+
+      const tryAdminLogin = () => {
+        if (adminPassword === ADMIN_PASSWORD) {
+          setAdminUnlocked(true);
+          setIsAdmin(true);
+          setTab("admin");
+        } else {
+          alert("Incorrect password.");
+        }
+      };
       const [filterVal, setFilterVal] = useState("all");
       const [filterDept, setFilterDept] = useState("all");
       const [search, setSearch] = useState("");
@@ -310,8 +325,8 @@
                 ))}
               </div>
               <button
-                onClick={() => { setIsAdmin((a) => !a); setTab("admin"); }}
-                style={{ ...navBtn(tab === "admin"), borderColor: isAdmin ? "#4FAD82" : undefined, color: isAdmin ? "#2e7d5a" : undefined, background: isAdmin ? "#f0faf5" : undefined }}>
+                onClick={() => { if (adminUnlocked) { setIsAdmin((a) => !a); setTab("admin"); } else { setTab("admin_login"); } }}
+                style={{ ...navBtn(tab === "admin" || tab === "admin_login"), borderColor: isAdmin ? "#4FAD82" : undefined, color: isAdmin ? "#2e7d5a" : undefined, background: isAdmin ? "#f0faf5" : undefined }}>
                 {isAdmin ? "⚙️ Admin ✓" : "⚙️ Admin"}
                 {pending.length > 0 && isAdmin && <span style={{ marginLeft: 6, background: "#D4704A", color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pending.length}</span>}
               </button>
@@ -438,8 +453,30 @@
               </div>
             )}
 
+            {/* ADMIN LOGIN */}
+            {!loading && tab === "admin_login" && (
+              <div style={{ maxWidth: 400, margin: "80px auto", textAlign: "center" }}>
+                <div style={{ background: "#fff", borderRadius: 20, padding: "48px 36px", border: "1.5px solid #ede8e0", boxShadow: "0 4px 16px rgba(80,50,20,.06)" }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>{"🔒"}</div>
+                  <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: "#2c1f0e", marginBottom: 8 }}>Admin Access</div>
+                  <p style={{ fontSize: 14, color: "#9a8a78", marginBottom: 24, lineHeight: 1.6 }}>Enter the admin password to review and manage submissions.</p>
+                  <input
+                    type="password"
+                    placeholder="Enter password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") tryAdminLogin(); }}
+                    style={{ width: "100%", padding: "12px 16px", border: "1.5px solid #e0d8ce", borderRadius: 10, fontSize: 15, color: "#3a2c1e", background: "#faf8f5", outline: "none", boxSizing: "border-box", marginBottom: 16, textAlign: "center" }}
+                  />
+                  <button onClick={tryAdminLogin} style={{ background: "linear-gradient(135deg,#4FAD82,#3d9a6f)", border: "none", borderRadius: 10, padding: "12px 32px", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%" }}>
+                    Unlock Admin
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ADMIN */}
-            {!loading && tab === "admin" && (
+            {!loading && tab === "admin" && adminUnlocked && (
               <div>
                 <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 30, color: "#2c1f0e", marginBottom: 6 }}>Admin — Moderation & Highlights</div>
                 <p style={{ fontSize: 14, color: "#9a8a78", marginBottom: 28, lineHeight: 1.6 }}>Review pending submissions before they go live. Feature standout stories to surface them across the organization.</p>
