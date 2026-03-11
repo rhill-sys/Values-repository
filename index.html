@@ -36,7 +36,7 @@
     // =========================================================
     // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     // =========================================================
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw07QeisFkC2iKCXVwO24zUpHy5M4C55LFZwXhuz0b7IUivdWquLxSXNDCM9F5NeePa/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx2gUMmO4JnDhsRhd7XHspqqGG2jed6T4ieBGwOnqYO0SQqSSoPoTqw5uW0_8YCgmtb/exec";
     // =========================================================
 
     const VALUES = [
@@ -150,31 +150,36 @@
           setLoading(false);
           return;
         }
-        fetch(SCRIPT_URL)
-          .then((r) => r.json())
-          .then((res) => {
-            if (res.success && res.data) {
-              const mapped = res.data.map((row, i) => {
-                let reactions = { "💛": 0, "👏": 0, "🌟": 0 };
-                try { if (row.Reactions) reactions = JSON.parse(row.Reactions); } catch (e) {}
-                return {
-                  id: i + 1,
-                  nominee: row.Nominee || "",
-                  nominator: row.Nominator || "",
-                  department: row.Department || "",
-                  value: row.Value || "",
-                  story: row.Story || "",
-                  status: (row.Status || "pending").toLowerCase().trim(),
-                  highlighted: (row.Highlighted || "").toString().toLowerCase() === "yes",
-                  date: row.Timestamp ? new Date(row.Timestamp).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-                  reactions: reactions,
-                };
-              });
-              setStories(mapped);
-            }
-            setLoading(false);
-          })
-          .catch(() => setLoading(false));
+        // Use a script tag approach (JSONP-style) to avoid CORS issues with Apps Script redirects
+        const callbackName = "_gsCallback_" + Date.now();
+        const script = document.createElement("script");
+        window[callbackName] = (res) => {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          if (res.success && res.data) {
+            const mapped = res.data.map((row, i) => {
+              let reactions = { "💛": 0, "👏": 0, "🌟": 0 };
+              try { if (row.Reactions) reactions = JSON.parse(row.Reactions); } catch (e) {}
+              return {
+                id: i + 1,
+                nominee: row.Nominee || "",
+                nominator: row.Nominator || "",
+                department: row.Department || "",
+                value: row.Value || "",
+                story: row.Story || "",
+                status: (row.Status || "pending").toLowerCase().trim(),
+                highlighted: (row.Highlighted || "").toString().toLowerCase() === "yes",
+                date: row.Timestamp ? new Date(row.Timestamp).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+                reactions: reactions,
+              };
+            });
+            setStories(mapped);
+          }
+          setLoading(false);
+        };
+        script.onerror = () => { setLoading(false); };
+        script.src = SCRIPT_URL + "?callback=" + callbackName;
+        document.body.appendChild(script);
       }, []);
 
       useEffect(() => { fetchStories(); }, [fetchStories]);
@@ -228,9 +233,11 @@
           return;
         }
 
+        // Use no-cors mode to avoid CORS issues with Google Apps Script redirects
+        // We can't read the response, but the data will arrive in the sheet
         fetch(SCRIPT_URL, {
           method: "POST",
-          headers: { "Content-Type": "text/plain" },
+          mode: "no-cors",
           body: JSON.stringify({
             nominee: form.nominee.trim(),
             nominator: form.nominator.trim(),
@@ -239,17 +246,11 @@
             story: form.story.trim(),
           }),
         })
-          .then((r) => r.json())
-          .then((res) => {
-            if (res.success) {
-              setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
-              setDone(true);
-              setSubmitting(false);
-              setTimeout(() => { setDone(false); setTab("feed"); fetchStories(); }, 3000);
-            } else {
-              alert("Something went wrong. Please try again.");
-              setSubmitting(false);
-            }
+          .then(() => {
+            setForm({ nominee: "", nominator: "", department: "", value: "", story: "" });
+            setDone(true);
+            setSubmitting(false);
+            setTimeout(() => { setDone(false); setTab("feed"); fetchStories(); }, 3000);
           })
           .catch(() => {
             alert("Could not reach the server. Please check your connection and try again.");
