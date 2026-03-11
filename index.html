@@ -214,9 +214,62 @@
         .sort((a, b) => b.highlighted - a.highlighted || new Date(b.date) - new Date(a.date));
 
       const react = (id, e) => setStories((p) => p.map((s) => (s.id === id ? { ...s, reactions: { ...s.reactions, [e]: (s.reactions[e] || 0) + 1 } } : s)));
-      const highlight = (id) => setStories((p) => p.map((s) => (s.id === id ? { ...s, highlighted: !s.highlighted } : s)));
-      const approve = (id) => setStories((p) => p.map((s) => (s.id === id ? { ...s, status: "published" } : s)));
-      const reject = (id) => setStories((p) => p.filter((s) => s.id !== id));
+
+      // ----- Admin actions that write back to Google Sheet -----
+      const sendAdminAction = (story, action) => {
+        if (!SCRIPT_URL) return;
+        const iframeName = "admin_iframe_" + Date.now();
+        const iframe = document.createElement("iframe");
+        iframe.name = iframeName;
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+
+        const hiddenForm = document.createElement("form");
+        hiddenForm.method = "POST";
+        hiddenForm.action = SCRIPT_URL;
+        hiddenForm.target = iframeName;
+
+        const fields = {
+          action: action,
+          nominee_match: story.nominee,
+          nominator_match: story.nominator,
+          story_match: story.story,
+          timestamp: story.date ? new Date(story.date).toISOString() : "",
+        };
+
+        Object.entries(fields).forEach(([key, val]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = val;
+          hiddenForm.appendChild(input);
+        });
+
+        document.body.appendChild(hiddenForm);
+        hiddenForm.submit();
+        setTimeout(() => {
+          document.body.removeChild(hiddenForm);
+          document.body.removeChild(iframe);
+        }, 5000);
+      };
+
+      const highlight = (id) => {
+        const story = stories.find((s) => s.id === id);
+        if (story) sendAdminAction(story, "highlight");
+        setStories((p) => p.map((s) => (s.id === id ? { ...s, highlighted: !s.highlighted } : s)));
+      };
+
+      const approve = (id) => {
+        const story = stories.find((s) => s.id === id);
+        if (story) sendAdminAction(story, "approve");
+        setStories((p) => p.map((s) => (s.id === id ? { ...s, status: "published" } : s)));
+      };
+
+      const reject = (id) => {
+        const story = stories.find((s) => s.id === id);
+        if (story) sendAdminAction(story, "decline");
+        setStories((p) => p.filter((s) => s.id !== id));
+      };
 
       // ----- Validation -----
       const validate = () => {
